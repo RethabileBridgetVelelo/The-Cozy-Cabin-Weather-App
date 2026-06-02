@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cozy Winter Lo-Fi Player (All-in-One)</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;500&family=Plus+Jakarta+Sans:wght@300;600&display=swap" rel="stylesheet">
+
+    <style>
+        /* --- Core Variables & Reset --- */
+        :root {
+            --bg-dark: #0d0f18;
+            --glass-bg: rgba(26, 28, 41, 0.45);
+            --glass-border: rgba(214, 199, 255, 0.15);
+            --text-primary: #e6f7f4;
+            --text-muted: #8fa0ba;
+            --accent-glow: #d6c7ff;
+            --accent-cyan: #a5d5fe;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background: radial-gradient(circle at 50% 50%, #16192b, var(--bg-dark));
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            color: var(--text-primary);
+        }
+
+        /* --- Canvas Snow Layer --- */
+        #snowCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        /* --- Main Interface Container --- */
+        .player-container {
+            position: relative;
+            z-index: 2;
+            width: 100%;
+            max-width: 380px;
+            padding: 20px;
+        }
+
+        .glass-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 32px;
+            padding: 30px;
+            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.4),
+                        inset 0 1px 2px rgba(255, 255, 255, 0.1);
+        }
+
+        /* --- Status Header --- */
+        .player-status {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+        }
+
+        .tech-tag {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            color: var(--accent-cyan);
+            letter-spacing: 1px;
+        }
+
+        .audio-mode {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            border: 1px solid rgba(143, 160, 186, 0.2);
+            padding: 2px 8px;
+            border-radius: 12px;
+        }
+
+        /* --- Artwork & Vinyl Animation --- */
+        .art-workspace {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 1/1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        .vinyl-disk {
+            width: 190px;
+            height: 190px;
+            border-radius: 50%;
+            background: repeating-radial-gradient(
+                circle,
+                #1c1e30 0px,
+                #0f111a 4px,
+                #25283d 8px
+            );
+            border: 6px solid rgba(255, 255, 255, 0.03);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: transform 0.5s ease-in-out;
+        }
+
+        .vinyl-disk.playing {
+            animation: spin 16s linear infinite;
+        }
+
+        .vinyl-center {
+            width: 55px;
+            height: 55px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent-glow), var(--accent-cyan));
+            border: 4px solid #0d0f18;
+        }
+
+        .ambient-glow {
+            position: absolute;
+            width: 220px;
+            height: 220px;
+            background: radial-gradient(circle, rgba(214, 199, 255, 0.15) 0%, transparent 70%);
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        /* --- Typography --- */
+        .track-meta {
+            text-align: center;
+            margin-bottom: 25px;
+        }
+
+        .track-meta h2 {
+            font-size: 1.35rem;
+            font-weight: 600;
+            letter-spacing: -0.5px;
+            margin-bottom: 6px;
+        }
+
+        .track-meta p {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        /* --- Micro-timeline --- */
+        .progress-area {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 30px;
+        }
+
+        .time-stamp {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            width: 35px;
+        }
+
+        .progress-bar-container {
+            flex: 1;
+            height: 5px;
+            background: rgba(255, 255, 255, 0.06);
+            border-radius: 10px;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, var(--accent-cyan), var(--accent-glow));
+            border-radius: 10px;
+            position: relative;
+            transition: width 0.1s linear;
+        }
+
+        /* --- Aesthetic Controls --- */
+        .controls-wrapper {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 25px;
+        }
+
+        .ctrl-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            outline: none;
+        }
+
+        .ctrl-btn svg {
+            width: 22px;
+            height: 22px;
+            fill: var(--text-muted);
+            transition: fill 0.2s, transform 0.2s;
+        }
+
+        .ctrl-btn:hover svg {
+            fill: var(--text-primary);
+            transform: scale(1.05);
+        }
+
+        .play-main {
+            background: rgba(255, 255, 255, 0.08);
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.2);
+            transition: background 0.2s, transform 0.2s;
+        }
+
+        .play-main svg {
+            width: 24px;
+            height: 24px;
+            fill: var(--text-primary);
+            margin-left: 2px;
+        }
+
+        .play-main.playing-state svg {
+            margin-left: 0;
+        }
+
+        .play-main:hover {
+            background: rgba(255, 255, 255, 0.15);
+            transform: scale(1.05);
+        }
+
+        /* --- Animations --- */
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="snowCanvas"></canvas>
+
+    <div class="player-container">
+        <div class="glass-card">
+            <div class="player-status">
+                <span class="tech-tag">// STATUS: COZY</span>
+                <span class="audio-mode">Stereo.io</span>
+            </div>
+
+            <div class="art-workspace">
+                <div class="vinyl-disk" id="vinyl">
+                    <div class="vinyl-center"></div>
+                </div>
+                <div class="ambient-glow"></div>
+            </div>
+
+            <div class="track-meta">
+                <h2 id="title">Midnight Coffee</h2>
+                <p id="artist">Chillhop Beats Collective</p>
+            </div>
+
+            <div class="progress-area">
+                <div class="time-stamp" id="current-time">0:00</div>
+                <div class="progress-bar-container" id="progress-container">
+                    <div class="progress-bar" id="progress"></div>
+                </div>
+                <div class="time-stamp" id="duration">3:15</div>
+            </div>
+
+            <div class="controls-wrapper">
+                <button id="prev" class="ctrl-btn" title="Previous">
+                    <svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+                </button>
+                <button id="play" class="ctrl-btn play-main" title="Play">
+                    <svg id="play-icon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                </button>
+                <button id="next" class="ctrl-btn" title="Next">
+                    <svg viewBox="0 0 24 24"><path d="M16 6h2v12h-2zm-11 0v12l8.5-6z"/></svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <audio id="audio" src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"></audio>
+
+
+    <script>
+        // --- Elements Setup ---
+        const audio = document.getElementById('audio');
+        const playBtn = document.getElementById('play');
+        const playIcon = document.getElementById('play-icon');
+        const prevBtn = document.getElementById('prev');
+        const nextBtn = document.getElementById('next');
+        const progress = document.getElementById('progress');
+        const progressContainer = document.getElementById('progress-container');
+        const title = document.getElementById('title');
+        const artist = document.getElementById('artist');
+        const currentTimeEl = document.getElementById('current-time');
+        const durationEl = document.getElementById('duration');
+        const vinyl = document.getElementById('vinyl');
+
+        // Track Database
+        const tracks = [
+            { title: 'Midnight Coffee', artist: 'Chillhop Beats Collective', src: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3' },
+            { title: 'Frosted Window', artist: 'Ethereal Space', src: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3' },
+            { title: 'Nordic Lights', artist: 'Nostalgia Coding', src: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3' }
+        ];
+
+        let trackIndex = 0;
+
+        function loadTrack(track) {
+            title.innerText = track.title;
+            artist.innerText = track.artist;
+            audio.src = track.src;
+        }
+
+        function playTrack() {
+            playBtn.classList.add('playing-state');
+            vinyl.classList.add('playing');
+            playIcon.innerHTML = `<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>`;
+            audio.play();
+        }
+
+        function pauseTrack() {
+            playBtn.classList.remove('playing-state');
+            vinyl.classList.remove('playing');
+            playIcon.innerHTML = `<path d="M8 5v14l11-7z"/>`;
+            audio.pause();
+        }
+
+        function updateProgress(e) {
+            const { duration, currentTime } = e.srcElement;
+            if (!duration) return;
+            
+            const progressPercent = (currentTime / duration) * 100;
+            progress.style.width = `${progressPercent}%`;
+
+            let currentMins = Math.floor(currentTime / 60);
+            let currentSecs = Math.floor(currentTime % 60);
+            if (currentSecs < 10) currentSecs = `0${currentSecs}`;
+            currentTimeEl.innerText = `${currentMins}:${currentSecs}`;
+
+            let durationMins = Math.floor(duration / 60);
+            let durationSecs = Math.floor(duration % 60);
+            if (durationSecs < 10) durationSecs = `0${durationSecs}`;
+            durationEl.innerText = `${durationMins}:${durationSecs}`;
+        }
+
+        function setProgress(e) {
+            const width = this.clientWidth;
+            const clickX = e.offsetX;
+            const duration = audio.duration;
+            audio.currentTime = (clickX / width) * duration;
+        }
+
+        // --- Event Triggers ---
+        playBtn.addEventListener('click', () => {
+            const isPlaying = playBtn.classList.contains('playing-state');
+            if (isPlaying) {
+                pauseTrack();
+            } else {
+                playTrack();
+            }
+        });
+
+        prevBtn.addEventListener('click', () => {
+            trackIndex = (trackIndex - 1 + tracks.length) % tracks.length;
+            loadTrack(tracks[trackIndex]);
+            playTrack();
+        });
+
+        nextBtn.addEventListener('click', () => {
+            trackIndex = (trackIndex + 1) % tracks.length;
+            loadTrack(tracks[trackIndex]);
+            playTrack();
+        });
+
+        audio.addEventListener('timeupdate', updateProgress);
+        progressContainer.addEventListener('click', setProgress);
+        audio.addEventListener('ended', () => {
+            trackIndex = (trackIndex + 1) % tracks.length;
+            loadTrack(tracks[trackIndex]);
+            playTrack();
+        });
+
+        loadTrack(tracks[trackIndex]);
+
+        // --- Ambient Snow Engine ---
+        const canvas = document.getElementById('snowCanvas');
+        const ctx = canvas.getContext('2d');
+
+        let width = window.innerWidth;
+        let height = window.innerHeight;
+        canvas.width = width;
+        canvas.height = height;
+
+        const numFlakes = 45;
+        const flakes = [];
+
+        for (let i = 0; i < numFlakes; i++) {
+            flakes.push({
+                x: Math.random() * width,
+                y: Math.random() * height,
+                r: Math.random() * 2 + 1,
+                d: Math.random() * numFlakes,
+                speed: Math.random() * 0.5 + 0.2
+            });
+        }
+
+        function renderSnow() {
+            ctx.clearRect(0, 0, width, height);
+            ctx.fillStyle = 'rgba(165, 213, 254, 0.25)';
+            ctx.beginPath();
+            for (let i = 0; i < numFlakes; i++) {
+                const f = flakes[i];
+                ctx.moveTo(f.x, f.y);
+                ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2, true);
+
+                f.y += f.speed;
+                f.x += Math.sin(f.d) * 0.2;
+
+                if (f.y > height) {
+                    flakes[i] = { x: Math.random() * width, y: 0, r: f.r, d: f.d, speed: f.speed };
+                }
+            }
+            ctx.fill();
+            requestAnimationFrame(renderSnow);
+        }
+
+        window.addEventListener('resize', () => {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+        });
+
+        renderSnow();
+    </script>
+</body>
+</html>
